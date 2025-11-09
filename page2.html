@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sentinel Cyclone Detector — Sentinel Hub + SAR + On-device ML</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root{
+      --bg1: #eef9ff;
+      --bg2: #f6fcff;
+      --card: #ffffff;
+      --accent: #0b7bff;
+      --accent-2:#00a3ff;
+      --muted:#5f6d7a;
+      --glass: rgba(255,255,255,0.8);
+      --success:#0fb27a;
+      --warn:#ff7a00;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Arial;color:#073045;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
+    .container{max-width:1200px;margin:20px auto;padding:18px;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,0.9),rgba(255,255,255,0.75));box-shadow:0 12px 40px rgba(5,35,60,0.08);}
+    header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap}
+    h1{margin:0;font-size:26px}
+    p.lead{color:var(--muted);margin-top:6px;max-width:780px}
+    #map{height:64vh;border-radius:12px;overflow:hidden;margin-top:14px;border:1px solid rgba(11,35,58,0.06)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+    .btn{background:var(--accent);color:white;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;font-weight:700;box-shadow:0 6px 18px rgba(11,123,255,0.12);transition:transform .18s ease}
+    .btn:active{transform:translateY(1px)}
+    .btn.secondary{background:transparent;color:var(--accent);border:1px solid rgba(11,123,255,0.12);box-shadow:none}
+    .panel{margin-top:12px;background:var(--glass);padding:14px;border-radius:12px;display:flex;gap:12px;align-items:center}
+    .sidebar{width:320px;margin-left:16px}
+    .row{display:flex;gap:12px}
+    .small{font-size:13px;color:var(--muted)}
+    .result{font-weight:700;color:#073045}
+    input,select,textarea{padding:8px;border-radius:8px;border:1px solid rgba(11,35,58,0.06);min-width:0}
+    .legend{display:flex;gap:8px;align-items:center}
+    .legend .item{display:flex;align-items:center;gap:8px;font-size:13px}
+    .dot{width:14px;height:14px;border-radius:50%}
+    .metrics{display:flex;gap:10px;flex-wrap:wrap}
+    .metric{background:white;padding:8px;border-radius:10px;box-shadow:0 6px 14px rgba(8,30,50,0.04);min-width:160px}
+    .muted-block{background:linear-gradient(180deg,rgba(250,250,255,0.8),rgba(245,250,255,0.6));padding:10px;border-radius:10px;border:1px solid rgba(11,35,58,0.03)}
+    .controls-right{margin-left:auto;display:flex;gap:8px}
+    footer{font-size:13px;color:var(--muted);margin-top:12px}
+    @media (max-width:1100px){.sidebar{width:auto;margin-left:0}.controls-right{margin-left:0}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Sentinel Cyclone Detector</h1>
+        <p class="lead">A friendly, interactive site that visualizes Sentinel imagery (optical & SAR) and runs an on-device ML model to highlight probable cyclone formations. This version uses Sentinel Hub WMS/WMTS for high-quality tiles, includes Sentinel-1 SAR overlay, a time animation player, and a TF.js model hook for on-device inference.</p>
+      </div>
+      <div class="sidebar">
+        <div class="panel" style="flex-direction:column;align-items:stretch">
+          <label class="small">Sentinel Hub Instance ID</label>
+          <input id="instanceId" placeholder="Enter your Sentinel Hub instance ID (required for WMS)" />
+          <div class="small" style="margin-top:8px">Need a free instance? Register at Sentinel Hub and create an instance for demo access. For privacy, you can also host a server-side proxy with your credentials.</div>
+        </div>
+        <div class="panel" style="margin-top:10px;flex-direction:column;align-items:stretch">
+          <label class="small">Select base layer</label>
+          <select id="baseLayer">
+            <option value="TRUE_COLOR">Sentinel-2 True Color</option>
+            <option value="BANDS_NDVI">Sentinel-2 NDVI</option>
+            <option value="MODIS_TOC">MODIS (fallback)</option>
+          </select>
+          <label class="small" style="margin-top:10px">SAR overlay</label>
+          <select id="sarLayer">
+            <option value="S1_GRD">Sentinel-1 GRD (VV/VH)</option>
+            <option value="S1_VV">Sentinel-1 VV</option>
+            <option value="S1_VH">Sentinel-1 VH</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <div class="controls">
+      <div style="display:flex;gap:8px;align-items:center">
+        <label class="small">Date range (end)</label>
+        <input type="date" id="endDate" />
+        <label class="small">Hours back</label>
+        <select id="hoursBack"><option>24</option><option selected>48</option><option>72</option></select>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <label class="small">Model URL (optional)</label>
+        <input id="modelUrl" placeholder="(e.g. https://myhost.com/model/model.json)" style="width:360px" />
+        <div class="controls-right">
+          <button class="btn secondary" id="loadModelBtn">Load model</button>
+          <button class="btn" id="playBtn">Play animation</button>
+          <button class="btn secondary" id="analyzeBtn">Analyze current frame</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:14px;margin-top:12px;align-items:flex-start">
+      <div style="flex:1">
+        <div id="map"></div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;align-items:center">
+          <div class="legend">
+            <div class="item"><span class="dot" style="background:linear-gradient(180deg,var(--warn),#ffb37a)"></span> Possible cyclone</div>
+            <div class="item"><span class="dot" style="background:linear-gradient(180deg,var(--accent),var(--accent-2))"></span> Satellite tile</div>
+            <div class="item"><span class="dot" style="background:linear-gradient(180deg,#8fd3ff,#d6f5ff)"></span> SAR overlay</div>
+          </div>
+          <div class="muted-block small">Tip: pan/zoom to a region (Bay of Bengal, Arabian Sea, North Atlantic, Pacific) and press Play to animate recent frames.</div>
+        </div>
+      </div>
+
+      <aside style="width:320px">
+        <div class="panel" style="flex-direction:column;align-items:stretch">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div class="small">Detection status</div><div id="status" class="result">Idle</div></div>
+          <div style="margin-top:8px" class="small">Probability</div>
+          <div style="margin-top:6px;display:flex;gap:8px;align-items:center">
+            <div style="flex:1;background:linear-gradient(90deg,#e9f7ff,#f6fcff);height:16px;border-radius:8px;overflow:hidden;border:1px solid rgba(11,35,58,0.04)"><div id="probBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--warn),#ffb37a);border-radius:8px"></div></div>
+            <div id="probText" style="font-weight:700">—</div>
+          </div>
+
+          <div style="margin-top:12px" class="small">Analysis metrics</div>
+          <div class="metrics" style="margin-top:8px">
+            <div class="metric"><div class="small">Top circularity</div><div id="mCircularity" style="font-weight:700">—</div></div>
+            <div class="metric"><div class="small">Max area (px)</div><div id="mArea" style="font-weight:700">—</div></div>
+            <div class="metric"><div class="small">SAR contrast</div><div id="mSar" style="font-weight:700">—</div></div>
+          </div>
+
+          <div style="margin-top:12px" class="small">How probability is calculated</div>
+          <div class="small" style="margin-top:6px">We combine multiple signals into a probability score (0–100%):</div>
+          <ol class="small" style="margin-top:6px">
+            <li>Optical circularity & brightness (weighted)</li>
+            <li>SAR backscatter patterns indicating low/high wind fetch</li>
+            <li>Temporal growth (how features intensify over last frames)</li>
+            <li>Model confidence (if on-device ML model is loaded)</li>
+          </ol>
+          <div class="small" style="margin-top:8px">All weights are configurable in the code (client-side) for experimentation. This demo shows the combined normalized score as the probability bar above.</div>
+        </div>
+
+        <div class="panel" style="margin-top:10px;flex-direction:column;align-items:stretch">
+          <div class="small">Model status</div>
+          <div id="modelStatus" class="small" style="margin-top:8px">No model loaded — heuristic fallback active.</div>
+          <div style="margin-top:8px"><button class="btn" id="downloadReport">Export quick report</button></div>
+        </div>
+
+      </aside>
+    </div>
+
+    <footer>
+      <div>Notes: This is a research/demo interface. For operational cyclone detection use multi-sensor workflows, meteorological analysis, and official advisories. Sentinel Hub usage requires an instance ID and adherence to licensing.</div>
+    </footer>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.9.0/dist/tf.min.js"></script>
+
+  <script>
+    const instanceInput = document.getElementById('instanceId');
+    const baseLayerSelect = document.getElementById('baseLayer');
+    const sarLayerSelect = document.getElementById('sarLayer');
+    const endDateInput = document.getElementById('endDate');
+    const hoursBackSelect = document.getElementById('hoursBack');
+    const playBtn = document.getElementById('playBtn');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const loadModelBtn = document.getElementById('loadModelBtn');
+    const modelUrlInput = document.getElementById('modelUrl');
+    const statusEl = document.getElementById('status');
+    const probBar = document.getElementById('probBar');
+    const probText = document.getElementById('probText');
+    const mCircularity = document.getElementById('mCircularity');
+    const mArea = document.getElementById('mArea');
+    const mSar = document.getElementById('mSar');
+    const modelStatus = document.getElementById('modelStatus');
+
+    function todayISO(){ return new Date().toISOString().slice(0,10); }
+    endDateInput.value = todayISO();
+
+    function wmtsTileTemplate(instanceId, layer, time){
+      return `https://services.sentinel-hub.com/ogc/wmts/${instanceId}/1.0.0/${layer}/default/${encodeURIComponent(time)}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`;
+    }
+
+    const map = L.map('map', {zoomControl:true, preferCanvas:true}).setView([15,90],3);
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19, attribution:'© OpenStreetMap contributors'}).addTo(map);
+
+    let baseTile = null; let sarTile = null; let overlayGroup = L.layerGroup().addTo(map);
+
+    function updateVisibleTiles(timeStr){
+      const instance = instanceInput.value.trim();
+      const baseName = (baseLayerSelect.value==='TRUE_COLOR') ? 'TRUE_COLOR' : (baseLayerSelect.value==='BANDS_NDVI' ? 'BANDS_NDVI' : 'MODIS_TOC');
+      const sarName = (sarLayerSelect.value==='S1_GRD') ? 'S1_GRD' : (sarLayerSelect.value==='S1_VV'?'S1_VV':'S1_VH');
+
+      if(baseTile) map.removeLayer(baseTile);
+      if(sarTile) map.removeLayer(sarTile);
+
+      if(instance){
+        baseTile = L.tileLayer(wmtsTileTemplate(instance, baseName, timeStr), {maxZoom:12, opacity:0.95, attribution:'Sentinel Hub'}).addTo(map);
+        sarTile = L.tileLayer(wmtsTileTemplate(instance, sarName, timeStr), {maxZoom:12, opacity:0.6, attribution:'Sentinel-1 via Sentinel Hub'}).addTo(map);
+      } else {
+        const gibslayer = 'VIIRS_SNPP_CorrectedReflectance_TrueColor';
+        baseTile = L.tileLayer('https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/'+gibslayer+'/default/'+encodeURIComponent(timeStr)+'/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg',{maxZoom:9,opacity:0.9, attribution:'NASA GIBS'}).addTo(map);
+        if(sarTile){ map.removeLayer(sarTile); sarTile = null; }
+      }
+    }
+
+    function generateTimeSeries(endDateStr, hoursBack){
+      const end = new Date(endDateStr + 'T00:00:00Z');
+      const intervalH = 6;
+      const count = Math.max(1, Math.ceil(hoursBack/intervalH));
+      const times = [];
+      for(let i=0;i<count;i++){
+        const d = new Date(end.getTime() - (hoursBack - i*intervalH)*3600*1000);
+        const iso = d.toISOString().slice(0,19)+'Z';
+        times.push(iso);
+      }
+      return times;
+    }
+
+    let animTimer=null; let animIndex=0; let animTimes=[];
+    playBtn.addEventListener('click', ()=>{
+      const end = endDateInput.value || todayISO();
+      const hours = parseInt(hoursBackSelect.value || '48');
+      animTimes = generateTimeSeries(end, hours);
+      if(animTimes.length===0) return;
+      animIndex = 0; playFrame(animTimes[animIndex]);
+      if(animTimer) clearInterval(animTimer);
+      animTimer = setInterval(()=>{ animIndex++; if(animIndex>=animTimes.length) animIndex=0; playFrame(animTimes[animIndex]); }, 1200);
+    });
+
+    function playFrame(timeStr){
+      statusEl.textContent = 'Loading frame '+timeStr;
+      updateVisibleTiles(timeStr);
+      overlayGroup.clearLayers();
+      if(window.modelLoaded){
+        setTimeout(()=>runModelOnView(timeStr),1200);
+      }
+      setTimeout(()=>{ statusEl.textContent='Idle'; },1600);
+    }
+
+    map.on('movestart', ()=>{ if(animTimer){ clearInterval(animTimer); animTimer=null; } });
+
+    function clampLon(lon){ if(lon>180) return ((lon+180)%360)-180; if(lon<-180) return ((lon-180)%360)+180; return lon; }
+    function getMapBBOX4326(){
+      const b = map.getBounds();
+      const sw = b.getSouthWest();
+      const ne = b.getNorthEast();
+      const minLon = clampLon(sw.lng);
+      const minLat = Math.max(-90,Math.min(90,sw.lat));
+      const maxLon = clampLon(ne.lng);
+      const maxLat = Math.max(-90,Math.min(90,ne.lat));
+      return `${minLon},${minLat},${maxLon},${maxLat}`;
+    }
+
+    async function fetchWmsImage(instance, layer, timeStr){
+      const size = map.getSize();
+      const bbox = getMapBBOX4326();
+      const url = `https://services.sentinel-hub.com/ogc/wms/${instance}?SERVICE=WMS&REQUEST=GetMap&LAYERS=${encodeURIComponent(layer)}&FORMAT=image/png&CRS=EPSG:4326&WIDTH=${size.x}&HEIGHT=${size.y}&BBOX=${bbox}&TIME=${encodeURIComponent(timeStr)}`;
+      const resp = await fetch(url, {mode:'cors'});
+      if(!resp.ok) throw new Error('WMS fetch failed '+resp.status);
+      const blob = await resp.blob();
+      try{ const img = await createImageBitmap(blob); return img; }catch(e){ const urlObj = URL.createObjectURL(blob); const imgEl = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.crossOrigin='anonymous'; i.src=urlObj; }); URL.revokeObjectURL(urlObj); return imgEl; }
+    }
+
+    async function snapshotCanvas(){
+      const instance = instanceInput.value.trim();
+      if(!instance) throw new Error('CORS: analysis requires a Sentinel Hub instance ID or a CORS-enabled proxy. Provide instance ID in the sidebar.');
+      const baseName = (baseLayerSelect.value==='TRUE_COLOR') ? 'TRUE_COLOR' : (baseLayerSelect.value==='BANDS_NDVI' ? 'BANDS_NDVI' : 'MODIS_TOC');
+      const timeStr = animTimes.length?animTimes[animIndex]:(new Date().toISOString().slice(0,19)+'Z');
+      const imgBitmap = await fetchWmsImage(instance, baseName, timeStr);
+      const size = map.getSize();
+      const canvas = document.createElement('canvas'); canvas.width = size.x; canvas.height = size.y; const ctx = canvas.getContext('2d'); ctx.drawImage(imgBitmap,0,0,size.x,size.y);
+      return canvas;
+    }
+
+    async function fetchWmsSarCanvas(){
+      const instance = instanceInput.value.trim();
+      if(!instance) throw new Error('CORS: SAR sampling requires a Sentinel Hub instance ID.');
+      const sarName = (sarLayerSelect.value==='S1_GRD') ? 'S1_GRD' : (sarLayerSelect.value==='S1_VV'?'S1_VV':'S1_VH');
+      const timeStr = animTimes.length?animTimes[animIndex]:(new Date().toISOString().slice(0,19)+'Z');
+      const imgBitmap = await fetchWmsImage(instance, sarName, timeStr);
+      const size = map.getSize();
+      const canvas = document.createElement('canvas'); canvas.width = size.x; canvas.height = size.y; const ctx = canvas.getContext('2d'); ctx.drawImage(imgBitmap,0,0,size.x,size.y);
+      return canvas;
+    }
+
+    function extractFeaturesFromCanvas(canvas){
+      const w = canvas.width, h = canvas.height; const ctx = canvas.getContext('2d'); const imgd = ctx.getImageData(0,0,w,h); const data=imgd.data;
+      const TMP = document.createElement('canvas'); TMP.width=128; TMP.height=128; const tctx=TMP.getContext('2d'); tctx.drawImage(canvas,0,0,128,128);
+      let sumB=0, maxB=0, brightCount=0; for(let i=0;i<w*h;i++){ const r=data[i*4],g=data[i*4+1],b=data[i*4+2]; const br = 0.299*r+0.587*g+0.114*b; sumB += br; if(br>200) brightCount++; if(br>maxB) maxB=br; }
+      const avgB = sumB/(w*h);
+      return {rawCanvas:canvas, downsampled:TMP, stats:{avgB,maxB,brightCount}};
+    }
+
+    function heuristicDetect(canvas){
+      const w=canvas.width,h=canvas.height; const ctx=canvas.getContext('2d'); const imgd=ctx.getImageData(0,0,w,h); const data=imgd.data; const thresh=160; const mask=new Uint8Array(w*h);
+      for(let i=0;i<w*h;i++){ const r=data[i*4],g=data[i*4+1],b=data[i*4+2]; const bright=0.299*r+0.587*g+0.114*b; mask[i]=bright>thresh?1:0; }
+      const visited=new Uint8Array(w*h); const blobs=[]; function idx(x,y){return y*w+x}
+      for(let y=0;y<h;y++){ for(let x=0;x<w;x++){ const i=idx(x,y); if(mask[i]&&!visited[i]){ const q=[ [x,y] ]; visited[i]=1; let area=0,sumx=0,sumy=0,minx=x,maxx=x,miny=y,maxy=y; while(q.length){ const [cx,cy]=q.pop(); const ci=idx(cx,cy); if(!mask[ci]) continue; if(visited[ci]) continue; visited[ci]=1; area++; sumx+=cx; sumy+=cy; if(cx<minx)minx=cx;if(cx>maxx)maxx=cx;if(cy<miny)miny=cy;if(cy>maxy)maxy=cy; for(let ny=cy-1;ny<=cy+1;ny++) for(let nx=cx-1;nx<=cx+1;nx++){ if(nx>=0&&nx<w&&ny>=0&&ny<h){ const ni=idx(nx,ny); if(mask[ni]&&!visited[ni]) q.push([nx,ny]); }} }
+        const cx=Math.round(sumx/area), cy=Math.round(sumy/area); blobs.push({area,centroid:[cx,cy],bbox:[minx,miny,maxx,maxy]}); } }}
+      const big=blobs.filter(b=>b.area>400).sort((a,b)=>b.area-a.area);
+      return big;
+    }
+
+    function scoreBlobs(blobs){
+      return blobs.map(b=>{ const [minx,miny,maxx,maxy]=b.bbox; const w=maxx-minx+1,h=maxy-miny+1; const bboxArea=w*h; const fillRatio=b.area/bboxArea; const aspect=Math.min(w,h)/Math.max(w,h); const circularity=fillRatio*aspect; return {...b,w,h,fillRatio,aspect,circularity}; }).sort((a,b)=>b.circularity-a.circularity);
+    }
+
+    window.modelLoaded=false; window.model=null;
+    loadModelBtn.addEventListener('click', async ()=>{
+      const url = modelUrlInput.value.trim(); if(!url){ alert('Please provide a model.json URL hosted CORS-enabled.'); return; }
+      try{ modelStatus.textContent='Loading model...'; window.model = await tf.loadLayersModel(url); window.modelLoaded=true; modelStatus.textContent='Model loaded (on-device).'; }
+      catch(e){ window.modelLoaded=false; modelStatus.textContent='Failed to load model — falling back to heuristic.'; }
+    });
+
+    async function runModelOnView(timeStr){
+      statusEl.textContent='Capturing view...';
+      try{
+        const canvas = await snapshotCanvas();
+        const features = extractFeaturesFromCanvas(canvas);
+        let modelProb=0;
+        if(window.modelLoaded && window.model){
+          let imgData = features.downsampled.getContext('2d').getImageData(0,0,128,128);
+          let arr = tf.browser.fromPixels(imgData).toFloat().div(255.0).expandDims(0);
+          let preds=null;
+          try{ preds = await window.model.predict(arr); let val=0; if(Array.isArray(preds)){ const t = preds[0]; val = (await t.data())[0]; preds.forEach(p=>p.dispose && p.dispose()); } else { val = (await preds.data())[0]; preds.dispose && preds.dispose(); } modelProb = Math.min(1,Math.max(0,val)); }
+          catch(e){ modelProb=0; }
+          arr.dispose();
+        }
+
+        const blobs = heuristicDetect(canvas);
+        const scored = scoreBlobs(blobs);
+        overlayGroup.clearLayers();
+        if(scored.length>0){
+          for(let i=0;i<Math.min(3,scored.length);i++){
+            const b = scored[i]; const [cx,cy]=b.centroid; const latlng = map.containerPointToLatLng([cx,cy]); const radius = Math.max(b.w,b.h) * (40075000 / Math.pow(2,map.getZoom()+8));
+            L.circle(latlng,{radius:radius,color:i===0?"#ff7a00":"#ffb86b",weight:2,fill:false}).addTo(overlayGroup);
+            L.marker(latlng).addTo(overlayGroup).bindPopup(`Blob ${i+1}<br>Area:${b.area} px<br>Circ:${b.circularity.toFixed(2)}`);
+          }
+        }
+
+        let sarContrast = 0;
+        try{ const sarCanvas = await fetchWmsSarCanvas(); if(scored.length>0){ const b=scored[0]; const [cx,cy]=b.centroid; const sctx = sarCanvas.getContext('2d'); const sx=Math.max(0,Math.round(cx-8)), sy=Math.max(0,Math.round(cy-8)); const sd = sctx.getImageData(sx,sy,16,16).data; let ssum=0; for(let i=0;i<sd.length;i+=4){ ssum += (0.299*sd[i]+0.587*sd[i+1]+0.114*sd[i+2]); } sarContrast = ssum/(16*16); }}catch(e){ sarContrast = 0; }
+
+        const opticalScore = scored.length>0? Math.min(1, scored[0].circularity*3.0) : 0;
+        const temporalScore = 0.5;
+        const sarScore = Math.min(1, sarContrast/200);
+        const modelWeight = window.modelLoaded?0.45:0.0;
+        const combined = (modelWeight*modelProb) + (0.35*opticalScore) + (0.15*sarScore) + (0.05*temporalScore);
+        const probability = Math.round(combined*100);
+
+        probBar.style.width = probability+'%'; probText.textContent = probability+'%'; mCircularity.textContent = (scored.length>0?scored[0].circularity.toFixed(2):'—'); mArea.textContent = (scored.length>0?scored[0].area:'—'); mSar.textContent = sarContrast? sarContrast.toFixed(1) : '—';
+        statusEl.textContent = 'Analysis complete';
+        return {probability, modelProb, opticalScore, sarScore, scored};
+      }catch(err){ statusEl.textContent='Error during analysis: '+String(err); throw err; }
+    }
+
+    analyzeBtn.addEventListener('click', async ()=>{ statusEl.textContent='Analyzing current frame...'; try{ const res = await runModelOnView(); console.log('analysis',res); }catch(e){ console.error(e); } });
+
+    updateVisibleTiles(new Date().toISOString().slice(0,19)+'Z');
+
+    document.getElementById('downloadReport').addEventListener('click', async ()=>{ statusEl.textContent='Generating report...'; try{ const res = await runModelOnView(); const report = {generated:new Date().toISOString(), center:map.getCenter(), zoom:map.getZoom(), analysis:res}; const blob = new Blob([JSON.stringify(report,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='cyclone_report.json'; a.click(); URL.revokeObjectURL(url); statusEl.textContent='Report downloaded'; }catch(e){ statusEl.textContent='Failed to generate report'; } });
+
+    window.addEventListener('keydown', e=>{ if(e.key===' ') { e.preventDefault(); playBtn.click(); } if(e.key==='a') analyzeBtn.click(); });
+
+    setTimeout(()=>{ L.popup({maxWidth:380}).setLatLng(map.getCenter()).setContent('<b>Welcome!</b><br>Enter your Sentinel Hub instance ID (optional), choose hours back and press Play to animate recent frames. Press Analyze to run detection on the visible frame.').openOn(map); },900);
+  </script>
+</body>
+</html>

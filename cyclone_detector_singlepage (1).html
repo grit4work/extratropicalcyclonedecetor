@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cyclone Detector — Sentinel Data Explorer</title>
+  <meta name="description" content="An informational, single-page site that explains cyclone detection from Sentinel satellite data. Friendly, explanatory tone with soothing radar-inspired visuals."/>
+  <style>
+    :root{
+      --bg:#041028;
+      --card:#08223a;
+      --accent1:#36c6ff;
+      --accent2:#7fe3c7;
+      --muted:#98aab3;
+      --radius:14px;
+      color:#e6f6ff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0}
+    body{
+      background: radial-gradient(1200px 700px at 10% 20%, rgba(54,198,255,0.06), transparent),
+                  radial-gradient(900px 500px at 85% 80%, rgba(127,227,199,0.03), transparent),
+                  var(--bg);
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; line-height:1.5;
+    }
+    .container{max-width:1100px;margin:0 auto;padding:28px}
+    header{display:flex;align-items:center;justify-content:space-between;padding:10px 0;position:sticky;top:0;backdrop-filter:blur(6px);background:linear-gradient(180deg,rgba(4,16,40,0.55),rgba(4,16,40,0.25));z-index:10;border-bottom:1px solid rgba(255,255,255,0.03)}
+    .logo{display:flex;gap:12px;align-items:center}
+    .logo .radar{width:48px;height:48px;border-radius:12px;background:conic-gradient(from 60deg,rgba(54,198,255,0.12),rgba(127,227,199,0.08));display:grid;place-items:center;border:1px solid rgba(255,255,255,0.04)}
+    .logo h1{font-size:18px;margin:0}
+    nav a{color:var(--muted);text-decoration:none;margin-left:18px;font-size:14px}
+    nav a:hover{color:var(--accent1)}
+
+    .hero{display:grid;grid-template-columns:1fr 420px;gap:28px;align-items:center;padding:48px 0}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:var(--radius);padding:22px;border:1px solid rgba(255,255,255,0.03)}
+    h2{margin:0 0 8px 0}
+    p.lead{color:var(--muted);font-size:15px}
+
+    .radar-visual{height:360px;border-radius:12px;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.03)}
+    .radar-bg{position:absolute;inset:0;display:grid;place-items:center}
+    .radar-scan{position:absolute;inset:0;background:radial-gradient(circle at 50% 50%, rgba(54,198,255,0.05), transparent 40%);animation:rotate 12s linear infinite;mix-blend-mode:screen}
+    @keyframes rotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    .legend{display:flex;gap:10px;align-items:center;margin-top:12px}
+    .legend span{font-size:13px;color:var(--muted)}
+    .dot{width:12px;height:12px;border-radius:50%}
+
+    section{padding:48px 0;border-bottom:1px dashed rgba(255,255,255,0.02)}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .steps{display:flex;flex-direction:column;gap:12px}
+    .step{display:flex;gap:12px;align-items:flex-start}
+    .step .num{width:44px;height:44px;flex:0 0 44px;border-radius:10px;background:linear-gradient(180deg,var(--card),rgba(255,255,255,0.02));display:grid;place-items:center;border:1px solid rgba(255,255,255,0.03)}
+
+    #mapCanvas{width:100%;height:420px;border-radius:12px;display:block}
+    .controls{display:flex;gap:10px;align-items:center;margin-top:12px}
+    button{background:linear-gradient(90deg,var(--accent1),var(--accent2));border:none;padding:10px 14px;border-radius:10px;color:#002;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+
+    footer{padding:28px 0;color:var(--muted);font-size:13px}
+
+    @media (max-width:900px){.hero{grid-template-columns:1fr}.grid-2{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container" style="display:flex;align-items:center;justify-content:space-between;padding:0">
+      <div class="logo">
+        <div class="radar">
+          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="18" cy="18" r="16" stroke="rgba(127,227,199,0.2)" stroke-width="2" />
+            <path d="M18 2 A16 16 0 0 1 34 18" stroke="rgba(54,198,255,0.9)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <h1 style="font-size:16px;margin-bottom:2px">Cyclone Detector</h1>
+          <div style="font-size:12px;color:var(--muted)">Sentinel data • Friendly explainer</div>
+        </div>
+      </div>
+      <nav>
+        <a href="#what">What</a>
+        <a href="#pipeline">Pipeline</a>
+        <a href="#visual">Visualiser</a>
+        <a href="#learn">Learn</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="hero">
+      <div class="card">
+        <h2>Hello — let’s explore cyclone detection</h2>
+        <p class="lead">This short informative site shows how Sentinel satellites can help spot, track, and characterise tropical cyclones. The tone is friendly and the visuals are soothing — think radar glow and calm maps.</p>
+        <div style="margin-top:18px" class="steps">
+          <div class="step"><strong>Data source:</strong>&nbsp;ESA Sentinel-1 (radar) and Sentinel-3 (ocean/infrared) — free, global swaths.</div>
+          <div class="step"><strong>Key idea:</strong>&nbsp;use synthetic-aperture radar (SAR) and infrared signatures to detect rotation, wind speed proxies, and cloud patterns.</div>
+          <div class="step"><strong>Goal:</strong>&nbsp;fast detection, clear visuals, and easy-to-understand explanations.</div>
+        </div>
+      </div>
+
+      <aside class="card radar-visual">
+        <div class="radar-bg">
+          <svg width="320" height="320" viewBox="0 0 320 320" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <radialGradient id="g1" cx="50%" cy="50%">
+                <stop offset="0%" stop-color="#36c6ff" stop-opacity="0.16"/>
+                <stop offset="100%" stop-color="#36c6ff" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <rect x="0" y="0" width="320" height="320" rx="12" fill="url(#g1)"/>
+            <g stroke="rgba(255,255,255,0.06)" stroke-width="1">
+              <circle cx="160" cy="160" r="120" fill="none"/>
+              <circle cx="160" cy="160" r="80" fill="none"/>
+              <circle cx="160" cy="160" r="40" fill="none"/>
+            </g>
+            <g id="pulse" fill="none" stroke="#7fe3c7" stroke-opacity="0.9" stroke-width="2">
+              <circle cx="160" cy="160" r="28" />
+            </g>
+          </svg>
+        </div>
+        <div class="radar-scan"></div>
+        <div style="position:absolute;left:18px;bottom:16px;color:var(--muted)">
+          <div class="legend"><div class="dot" style="background:var(--accent1)"></div><span>Radar return (SAR)</span></div>
+          <div class="legend"><div class="dot" style="background:var(--accent2)"></div><span>Detected vortex</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <section id="what">
+      <div class="grid-2">
+        <div class="card">
+          <h3>What is Sentinel data? (quick)</h3>
+          <p style="color:var(--muted)">The Sentinel satellites are part of the European Copernicus programme. For cyclone work we mainly use:</p>
+          <ul style="color:var(--muted)">
+            <li><strong>Sentinel-1:</strong> Active radar (SAR) — works through clouds and at night, great for wind/wave signatures.</li>
+            <li><strong>Sentinel-3:</strong> Infrared and altimetry — useful for sea-surface temperature and wave height.</li>
+            <li><strong>Sentinel-2 (optional):</strong> Optical imagery when clouds allow.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>Why radar helps</h3>
+          <p style="color:var(--muted)">SAR measures microwave reflectivity of the sea surface. Wind roughens the ocean, changing backscatter — with careful analysis we can estimate wind speed and look for the characteristic circular patterns and eye signatures of cyclones.</p>
+          <img src="https://via.placeholder.com/620x260?text=Satellite+placeholder+image" alt="placeholder" style="width:100%;border-radius:10px;margin-top:12px;">
+        </div>
+      </div>
+    </section>
+
+    <section id="pipeline">
+      <div class="card">
+        <h3>Typical detection pipeline</h3>
+        <div style="margin-top:12px" class="steps">
+          <div class="step"><div class="num">1</div><div><strong>Acquire</strong> — pull Sentinel swath (SAR product) for the region and timeframe.</div></div>
+          <div class="step"><div class="num">2</div><div><strong>Preprocess</strong> — radiometric calibration, thermal noise removal, georeference and terrain correction.</div></div>
+          <div class="step"><div class="num">3</div><div><strong>Feature extraction</strong> — compute wind proxies, vorticity maps, and texture descriptors.</div></div>
+          <div class="step"><div class="num">4</div><div><strong>Detect</strong> — thresholding, pattern matching, and optionally ML models to flag vortex candidates.</div></div>
+          <div class="step"><div class="num">5</div><div><strong>Validate & visualize</strong> — overlay results on map, human review, and produce alerts.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="visual">
+      <div class="card">
+        <h3>Interactive visualiser (demo)</h3>
+        <p style="color:var(--muted)">This small demo paints a calm "map" and simulates a Sentinel swath and a detected cyclone. It is not real data — it's for illustration and teaching.</p>
+        <canvas id="mapCanvas"></canvas>
+        <div class="controls">
+          <button id="playBtn">Play animation</button>
+          <button id="stepBtn" class="ghost">Step frame</button>
+          <button id="resetBtn" class="ghost">Reset</button>
+          <div style="margin-left:auto;color:var(--muted)">Data: <em>simulated</em></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="learn">
+      <div class="grid-2">
+        <div class="card">
+          <h3>Further learning</h3>
+          <p style="color:var(--muted)">If you'd like to try this for real, two practical next steps are:</p>
+          <ol style="color:var(--muted)">
+            <li>Download Sentinel-1 GRD products from the Copernicus Open Access Hub or AWS Public Datasets.</li>
+            <li>Use open-source tools like <em>SNAP</em> (ESA) or Python libraries (<code>rasterio</code>, <code>sentinelsat</code>, <code>xarray</code>) for processing.</li>
+          </ol>
+        </div>
+        <div class="card">
+          <h3>Quick tips</h3>
+          <ul style="color:var(--muted)">
+            <li>Radar is robust in cloudy storms — great for cyclones.</li>
+            <li>Combine SAR with IR/SST to improve intensity estimates.</li>
+            <li>Keep workflows reproducible: use notebooks and store processing steps.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>Cyclone Detector</strong><div style="color:var(--muted)">An educational demo — not for operational forecasts.</div>
+        </div>
+        <div style="color:var(--muted)">Made with care • Explore Sentinel data responsibly</div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    document.querySelectorAll('nav a').forEach(function(a){ a.addEventListener('click', function(e){ e.preventDefault(); var id = a.getAttribute('href'); var el = document.querySelector(id); if(el) el.scrollIntoView({behavior:'smooth'}); }); });
+
+    var canvas = document.getElementById('mapCanvas');
+    var ctx = canvas.getContext('2d');
+    function fitCanvas(){ var dpr = window.devicePixelRatio || 1; var cssW = canvas.clientWidth; var cssH = canvas.clientHeight || 420; canvas.width = Math.max(1, Math.floor(cssW * dpr)); canvas.height = Math.max(1, Math.floor(cssH * dpr)); ctx.setTransform(dpr,0,0,dpr,0,0); }
+    function onResize(){ fitCanvas(); drawFrame(elapsed); }
+    window.addEventListener('resize', onResize);
+    fitCanvas();
+
+    var elapsed = 0;
+    var playing = false;
+    var rafId = null;
+    var lastTimestamp = null;
+
+    var sim = { cyclone: {x:0.6, y:0.45, r:40, vx:-0.0008, vy:0.0004}, swathAngle:-40 };
+
+    function drawOcean(){ var w = canvas.clientWidth; var h = canvas.clientHeight || 420; var g = ctx.createLinearGradient(0,0,0,h); g.addColorStop(0,'#032034'); g.addColorStop(1,'#04283a'); ctx.fillStyle = g; ctx.fillRect(0,0,w,h); ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth = 1; for(var i=1;i<6;i++){ ctx.beginPath(); ctx.moveTo(0,h*i/6); ctx.lineTo(w,h*i/6); ctx.stroke(); } }
+
+    function drawSwath(angle){ var w = canvas.clientWidth; var h = canvas.clientHeight || 420; ctx.save(); ctx.translate(w/2,h/2); ctx.rotate(angle*Math.PI/180); ctx.fillStyle = 'rgba(54,198,255,0.06)'; ctx.beginPath(); if(typeof ctx.ellipse === 'function'){ ctx.ellipse(0,0, w*0.45, h*0.35, 0, -Math.PI/2, Math.PI/2); } else { ctx.moveTo(-w*0.45,0); ctx.quadraticCurveTo(0,-h*0.35,w*0.45,0); ctx.lineTo(w*0.45,h*0.35); ctx.quadraticCurveTo(0,0,-w*0.45,h*0.35); }
+    ctx.fill(); ctx.restore(); }
+
+    function drawCyclone(cx,cy,radius,frame){ ctx.beginPath(); ctx.arc(cx,cy,radius,0,Math.PI*2); ctx.fillStyle='rgba(127,227,199,0.06)'; ctx.fill(); ctx.beginPath(); ctx.arc(cx,cy,radius*0.35,0,Math.PI*2); ctx.fillStyle='rgba(36,36,48,0.6)'; ctx.fill(); ctx.beginPath(); ctx.arc(cx,cy,radius+6 + Math.sin(frame/6)*6,0,Math.PI*2); ctx.strokeStyle='rgba(127,227,199,0.8)'; ctx.lineWidth=2; ctx.stroke(); for(var i=0;i<8;i++){ var a = i*(Math.PI*2/8) + frame/40; var x = cx + Math.cos(a)*(radius+18); var y = cy + Math.sin(a)*(radius+18); ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+Math.cos(a)*8, y+Math.sin(a)*8); ctx.strokeStyle='rgba(54,198,255,0.8)'; ctx.lineWidth=1.2; ctx.stroke(); } }
+
+    function drawFrame(timeMs){ var frame = (timeMs || elapsed) / 16; drawOcean(); drawSwath(sim.swathAngle + Math.sin(frame/40)*6); sim.cyclone.x += sim.cyclone.vx * Math.cos(frame/80); sim.cyclone.y += sim.cyclone.vy * Math.sin(frame/80); var cx = canvas.clientWidth * sim.cyclone.x; var cy = (canvas.clientHeight || 420) * sim.cyclone.y; drawCyclone(cx,cy, sim.cyclone.r + Math.sin(frame/8)*3, frame); ctx.strokeStyle='rgba(127,227,199,0.5)'; ctx.lineWidth=2; ctx.setLineDash([6,6]); ctx.strokeRect(cx-110, cy-60, 220, 120); ctx.setLineDash([]); ctx.fillStyle='rgba(230,246,255,0.9)'; ctx.font = '14px Inter, Arial'; ctx.fillText('Simulated Sentinel swath',14,22); ctx.fillStyle='rgba(152,170,179,0.9)'; ctx.font = '12px Inter, Arial'; ctx.fillText('Detected vortex (simulated)',14,40); }
+
+    function animate(ts){ if(lastTimestamp === null) lastTimestamp = ts; var dt = Math.min(100, ts - lastTimestamp); lastTimestamp = ts; elapsed += dt; drawFrame(elapsed); if(playing) rafId = requestAnimationFrame(animate); }
+
+    document.getElementById('playBtn').addEventListener('click', function(){ playing = !playing; document.getElementById('playBtn').textContent = playing ? 'Pause animation' : 'Play animation'; if(playing){ lastTimestamp = null; rafId = requestAnimationFrame(animate); } else { if(rafId) cancelAnimationFrame(rafId); rafId = null; lastTimestamp = null; } });
+
+    document.getElementById('stepBtn').addEventListener('click', function(){ elapsed += 500; drawFrame(elapsed); });
+
+    document.getElementById('resetBtn').addEventListener('click', function(){ sim.cyclone.x = 0.6; sim.cyclone.y = 0.45; sim.cyclone.r = 40; elapsed = 0; lastTimestamp = null; if(rafId){ cancelAnimationFrame(rafId); rafId = null; } playing = false; document.getElementById('playBtn').textContent = 'Play animation'; drawFrame(0); });
+
+    drawFrame(0);
+  </script>
+</body>
+</html>
