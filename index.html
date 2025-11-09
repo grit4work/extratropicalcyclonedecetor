@@ -168,6 +168,13 @@
           <button id="resetBtn" class="ghost">Reset</button>
           <div style="margin-left:auto;color:var(--muted)">Data: <em>simulated</em></div>
         </div>
+
+        <!-- NEW: button that navigates to page2.html -->
+        <div style="margin-top:14px;display:flex;">
+          <button id="openPage2" style="margin-left:auto;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;background:linear-gradient(90deg,var(--accent1),var(--accent2));color:#002;border:none">
+            Open advanced detector
+          </button>
+        </div>
       </div>
     </section>
 
@@ -203,8 +210,10 @@
   </main>
 
   <script>
+    // smooth nav
     document.querySelectorAll('nav a').forEach(function(a){ a.addEventListener('click', function(e){ e.preventDefault(); var id = a.getAttribute('href'); var el = document.querySelector(id); if(el) el.scrollIntoView({behavior:'smooth'}); }); });
 
+    // canvas animation (your original demo logic)
     var canvas = document.getElementById('mapCanvas');
     var ctx = canvas.getContext('2d');
     function fitCanvas(){ var dpr = window.devicePixelRatio || 1; var cssW = canvas.clientWidth; var cssH = canvas.clientHeight || 420; canvas.width = Math.max(1, Math.floor(cssW * dpr)); canvas.height = Math.max(1, Math.floor(cssH * dpr)); ctx.setTransform(dpr,0,0,dpr,0,0); }
@@ -237,6 +246,12 @@
     document.getElementById('resetBtn').addEventListener('click', function(){ sim.cyclone.x = 0.6; sim.cyclone.y = 0.45; sim.cyclone.r = 40; elapsed = 0; lastTimestamp = null; if(rafId){ cancelAnimationFrame(rafId); rafId = null; } playing = false; document.getElementById('playBtn').textContent = 'Play animation'; drawFrame(0); });
 
     drawFrame(0);
+
+   
+    document.getElementById('openPage2').addEventListener('click', function(){
+  window.location.href = 'page2.html';
+});
+
   </script>
 </body>
 </html>
